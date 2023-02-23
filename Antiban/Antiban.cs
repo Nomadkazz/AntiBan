@@ -11,12 +11,7 @@ namespace Antiban
 {
     public class Antiban
     {
-        //- период между сообщениями на разные номера, должен быть не менее 10 сек.Для теста возьмем, что равно 10 сек
-        //- период между сообщениями на один номер, должен быть не менее 1 минуты.Для теста возьмем, что равно 1 минуте
-        //- период между сообщениями с приоритетом = 1 на один номер, не менее 24 часа.
-        //  Т.е.должна отправлять только одна рассылка в день на один номер.
-
-        Dictionary<DateTime, string> phoneNumberForTimeSlot = new Dictionary<DateTime, string>();
+        private Dictionary<DateTime, string> phoneNumberForTimeSlot = new Dictionary<DateTime, string>();
         private List<EventMessage> messages = new List<EventMessage>();
 
         /// <summary>
@@ -134,27 +129,21 @@ namespace Antiban
                     EventMessageId = eventMessage.Id,
                 });
 
-                var row = eventMessage.Id.ToString() + " " + thisEventTime.ToString() + " " + eventMessage.Priority.ToString() + " " + eventMessage.Phone.ToString() +"\n";                
-                File.AppendAllText(@"C:\Users\Aldiyar\source\repos\logging\logAntiBan.txt", row);
             }
             
             result.Sort((x, y) => DateTime.Compare(x.SentDateTime, y.SentDateTime));
             
-            var res = result.Select(m => { return m.EventMessageId.ToString() + " " + m.SentDateTime.ToString() ; });
-            var reslist = String.Join(";\n ", res);
-
-            File.AppendAllText(@"C:\Users\Aldiyar\source\repos\logging\logAntiBan.txt", "Res list:\n" + reslist + "\n");
             return result;
 
         }
 
         /// <summary>
-        /// Checks if desired time slot and time slots within the range of 10 seconds are not occupied.
-        /// Otherwise updates the time slot so that it satisfies the conditions.
+        /// Checks if desired time slot, and time slots within the range of 10 seconds are not occupied.
+        /// Otherwise updates the time slot so that it satisfies the condition.
         /// </summary>
         /// <param name="thisDateTime">Desired time slot.</param>
         /// <returns>
-        /// DateTime, which satisfies the conditions.
+        /// DateTime, which satisfies the condition.
         /// </returns>
         private DateTime getTimeSlot(DateTime thisDateTime)
         {            
