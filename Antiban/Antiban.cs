@@ -1,13 +1,8 @@
 ﻿using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
-using Xunit.Sdk;
-
 namespace Antiban
+
 {
     public class Antiban
     {
@@ -30,12 +25,11 @@ namespace Antiban
         public List<AntibanResult> GetResult()
         {
             phoneNumberForTimeSlot = new Dictionary<DateTime, string>();
-            Dictionary<string, List<DateTime>> timesForPhoneNumber = new Dictionary<string, List<DateTime>>();
-            Dictionary<string, DateTime> lastSentTimeToAnyNumber = new Dictionary<string, DateTime>();
-            Dictionary<string, DateTime> lastSentTimeToNumberPriority1 = new Dictionary<string, DateTime>();
+            Dictionary<string, List<DateTime>> sentTimesForPhoneNumber = new Dictionary<string, List<DateTime>>();
+            Dictionary<string, DateTime> lastSentTimeToNumberPriorityZero = new Dictionary<string, DateTime>();
+            Dictionary<string, DateTime> lastSentTimeToNumberPriorityOne = new Dictionary<string, DateTime>();
             var result = new List<AntibanResult>();
             
-            messages.Sort((x, y) => DateTime.Compare(x.DateTime, y.DateTime));
             foreach (var eventMessage in messages)
             {
                 string phoneNumber = eventMessage.Phone;
@@ -44,18 +38,18 @@ namespace Antiban
 
                 if (priority == 1)
                 {
-                    if (lastSentTimeToNumberPriority1.ContainsKey(phoneNumber))
+                    if (lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber))
                     {
-                        var lastSentTime = lastSentTimeToNumberPriority1.GetValueOrDefault(phoneNumber);
+                        var lastSentTime = lastSentTimeToNumberPriorityOne.GetValueOrDefault(phoneNumber);
                             
                         if ((thisEventTime - lastSentTime).TotalHours < 24)
                         {
                             thisEventTime = lastSentTime.AddHours(24);
                         }
                     }
-                    else if(!lastSentTimeToNumberPriority1.ContainsKey(phoneNumber) && lastSentTimeToAnyNumber.ContainsKey(phoneNumber))
+                    else if(!lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber) && lastSentTimeToNumberPriorityZero.ContainsKey(phoneNumber))
                     {
-                        var lastSentTime = lastSentTimeToAnyNumber.GetValueOrDefault(phoneNumber);
+                        var lastSentTime = lastSentTimeToNumberPriorityZero.GetValueOrDefault(phoneNumber);
 
                         if ((thisEventTime - lastSentTime).TotalSeconds < 60)
                         {
@@ -66,12 +60,12 @@ namespace Antiban
                 else if (priority == 0)
                 {
                     //phoneNumber exists
-                    if (lastSentTimeToNumberPriority1.ContainsKey(phoneNumber) || lastSentTimeToAnyNumber.ContainsKey(phoneNumber))
+                    if (lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber) || lastSentTimeToNumberPriorityZero.ContainsKey(phoneNumber))
                     {
                         DateTime lastSentTime = new DateTime();
-                        if (lastSentTimeToNumberPriority1.ContainsKey(phoneNumber) && lastSentTimeToAnyNumber.ContainsKey(phoneNumber))
+                        if (lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber) && lastSentTimeToNumberPriorityZero.ContainsKey(phoneNumber))
                         {
-                            var times = timesForPhoneNumber[phoneNumber];
+                            var times = sentTimesForPhoneNumber[phoneNumber];
                             var nearestTime = times[0];
                             var nearestTimeInterval = Math.Abs((thisEventTime - times[0]).TotalSeconds);
                             foreach (var time in times)
@@ -85,13 +79,13 @@ namespace Antiban
                             }
                             lastSentTime = nearestTime;
                         }
-                        else if (!lastSentTimeToAnyNumber.ContainsKey(phoneNumber) && lastSentTimeToNumberPriority1.ContainsKey(phoneNumber))
+                        else if (!lastSentTimeToNumberPriorityZero.ContainsKey(phoneNumber) && lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber))
                         {
-                            lastSentTime = lastSentTimeToNumberPriority1.GetValueOrDefault(phoneNumber);
+                            lastSentTime = lastSentTimeToNumberPriorityOne.GetValueOrDefault(phoneNumber);
                         }
-                        else if (lastSentTimeToAnyNumber.ContainsKey(phoneNumber) && !lastSentTimeToNumberPriority1.ContainsKey(phoneNumber))
+                        else if (lastSentTimeToNumberPriorityZero.ContainsKey(phoneNumber) && !lastSentTimeToNumberPriorityOne.ContainsKey(phoneNumber))
                         {
-                            lastSentTime = lastSentTimeToAnyNumber.GetValueOrDefault(phoneNumber);
+                            lastSentTime = lastSentTimeToNumberPriorityZero.GetValueOrDefault(phoneNumber);
                         }
 
                         if ((thisEventTime - lastSentTime).TotalSeconds < 60)
@@ -103,22 +97,22 @@ namespace Antiban
                 
                 thisEventTime = getTimeSlot(thisEventTime);
 
-                if (timesForPhoneNumber.ContainsKey(phoneNumber))
+                if (sentTimesForPhoneNumber.ContainsKey(phoneNumber))
                 {
-                    timesForPhoneNumber[phoneNumber].Add(thisEventTime);
+                    sentTimesForPhoneNumber[phoneNumber].Add(thisEventTime);
                 }
                 else
                 {
-                    timesForPhoneNumber[phoneNumber] = new List<DateTime>() { thisEventTime };
+                    sentTimesForPhoneNumber[phoneNumber] = new List<DateTime>() { thisEventTime };
                 }
             
                 if (priority == 1)
                 {
-                    lastSentTimeToNumberPriority1[phoneNumber] = thisEventTime;
+                    lastSentTimeToNumberPriorityOne[phoneNumber] = thisEventTime;
                 }
                 else
                 {
-                    lastSentTimeToAnyNumber[phoneNumber] = thisEventTime;
+                    lastSentTimeToNumberPriorityZero[phoneNumber] = thisEventTime;
                 }
 
                 phoneNumberForTimeSlot[thisEventTime] = phoneNumber;
@@ -147,17 +141,20 @@ namespace Antiban
         /// </returns>
         private DateTime getTimeSlot(DateTime thisDateTime)
         {            
-
             if (!phoneNumberForTimeSlot.ContainsKey(thisDateTime))
             {
                 var startRange = thisDateTime.AddSeconds(-9);
-                while (!phoneNumberForTimeSlot.ContainsKey(startRange) && startRange < thisDateTime)
+                while (startRange < thisDateTime)
                 {
-                    startRange = startRange.AddMilliseconds(1);
-                }
-                if (startRange != thisDateTime)
-                {
-                    thisDateTime = startRange.AddSeconds(10);
+                    if (!phoneNumberForTimeSlot.ContainsKey(startRange))
+                    {
+                        startRange = startRange.AddMilliseconds(1);
+                    }
+                    else if (phoneNumberForTimeSlot.ContainsKey(startRange))
+                    {
+                        thisDateTime = startRange.AddSeconds(10);
+                        startRange = thisDateTime;
+                    }
                 }
             }
 
@@ -169,9 +166,8 @@ namespace Antiban
                 {
                     temp = temp.AddMilliseconds(1);
                 }
-                else if (phoneNumberForTimeSlot.ContainsKey(temp) && temp < endRange)
-                {
-
+                else if (phoneNumberForTimeSlot.ContainsKey(temp))
+                {                    
                     thisDateTime = temp.AddSeconds(10);
                     temp = thisDateTime;
                     endRange = thisDateTime.AddSeconds(10);
